@@ -24,7 +24,7 @@ import logging
 import fiona
 import shapely.wkt
 from scipy.interpolate import splprep, splev
-from shapely.geometry import LineString, Polygon, mapping, asShape
+from shapely.geometry import LineString, Polygon, MultiPolygon, mapping, asShape
 
 
 class GeoSmtBase(object):
@@ -148,6 +148,28 @@ class GeoSmoothing(GeoSmtBase):
 
         return self.__getGeomIp(coords_ip, geom)
 
+    def smoothObj(self, geom):
+        """
+        simple objects versus polygons with holes
+        :param geom:
+        :return:
+        """
+        output = None
+        if isinstance(geom, LineString):
+            output = self.__smoothGeom(geom)
+
+        elif isinstance(geom, Polygon):
+            ext = self.__smoothGeom(Polygon(geom.exterior))
+            if geom.interiors > 0:
+                newInteriors = []
+                for interior in geom.interiors:
+                    newInteriors.append(self.__smoothGeom(Polygon(interior)))
+                output = ext.difference(MultiPolygon(newInteriors))
+            else:
+                output = ext
+
+        return output
+
     def smoothShp(self, src_file, dst_file):
         """
         Smoothing Shapefiles
@@ -169,7 +191,7 @@ class GeoSmoothing(GeoSmtBase):
                         geom = asShape(val['geometry'])
                         prop = val['properties']
 
-                        geom_ip = self.__smoothGeom(geom)
+                        geom_ip = self.smoothObj(geom)
 
                         dst_fl.write({
                                         'properties': prop,
@@ -199,7 +221,7 @@ class GeoSmoothing(GeoSmtBase):
             self.__logger.info("Smoothing WKT: Start process...")
 
             geom = self.__getGeomFromWkt(wkt)
-            geom_ip = self.__smoothGeom(geom)
+            geom_ip = self.smoothObj(geom)
 
             self.__logger.info("Smoothing WKT: finished process...")
 
